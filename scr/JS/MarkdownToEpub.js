@@ -1,0 +1,71 @@
+function readFile(file, callback) {
+    const reader = new FileReader();
+    reader.onload = function(event) {
+        callback(event.target.result);
+    };
+    reader.readAsText(file);
+}
+
+function markdownToHtml(markdown) {
+    return markdown.replace(/\*(.*?)\*/g, "<em>$1</em>")
+                   .replace(/\# (.*?)\n/g, "<h1>$1</h1>")
+                   .replace(/\n/g, "<br>");
+}
+
+function generateEpub(title, author, htmlContent) {
+    const zip = new JSZip();
+    
+    zip.file("mimetype", "application/epub+zip");
+    
+    const metaInf = zip.folder("META-INF");
+
+    metaInf.file("container.xml", `<?xml version='1.0'?>
+       
+        <container version='1.0' xmlns='urn:oasis:names:tc:opendocument:xmlns:container'>
+            <rootfiles>
+                <rootfile full-path='OEBPS/content.opf' media-type='application/oebps-package+xml'/>
+            </rootfiles>
+        </container>`);
+    
+    const oebps = zip.folder("OEBPS");
+    oebps.file("content.opf", `<?xml version='1.0' encoding='utf-8'?>
+        <package xmlns="http://www.idpf.org/2007/opf" version="3.0">
+            <metadata>
+                <title>${title}</title>
+                <creator>${author}</creator>
+            </metadata>
+            <manifest>
+                <item id="content" href="content.xhtml" media-type="application/xhtml+xml"/>
+            </manifest>
+            <spine>
+                <itemref idref="content"/>
+            </spine>
+        </package>`);
+    
+    oebps.file("content.xhtml", `<?xml version='1.0' encoding='utf-8'?>
+        <html xmlns="http://www.w3.org/1999/xhtml">
+            <head><title>${title}</title></head>
+            <body>${htmlContent}</body>
+        </html>`);
+    
+    zip.generateAsync({ type: "blob" }).then(function(content) {
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(content);
+        a.download = "documento.epub";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    });
+}
+
+function convertMarkdownToEpub() {
+    const fileInput = document.getElementById("fileInput");
+    if (fileInput.files.length === 0) {
+        alert("Por favor, selecciona un archivo Markdown.");
+        return;
+    }
+    readFile(fileInput.files[0], function(markdownContent) {
+        const htmlContent = markdownToHtml(markdownContent);
+        generateEpub("Mi Documento EPUB", "Autor Desconocido", htmlContent);
+    });
+}
